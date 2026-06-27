@@ -293,12 +293,16 @@
             switchState('state-matching');
 
             try {
-                // Look for an open riff session waiting for players (excluding our own sessions)
+                // Ignore stale lobbies that haven't pulsed a heartbeat in the last 15 seconds
+                const heartbeatThreshold = new Date(Date.now() - 15000).toISOString();
+
+                // Look for an open active riff session waiting for players
                 const { data: openRiffs, error } = await sbClient
                     .from('riffs')
                     .select('*')
                     .eq('status', 'waiting')
                     .neq('user_1_id', userId)
+                    .gt('created_at', heartbeatThreshold)
                     .order('created_at', { ascending: true })
                     .limit(1);
 
@@ -355,15 +359,17 @@
             }
         }
 
-        // Poll to see if someone joined the session we created
+        // Poll to see if someone joined the session we created, pulsing a heartbeat timestamp
         function startPollingForPartner(riffId) {
             checkInterval = setInterval(async () => {
                 if (!sbClient) return;
                 try {
+                    // Keep the lobby timestamp hot to prevent it from going "stale" to potential peers
                     const { data, error } = await sbClient
                         .from('riffs')
-                        .select('*')
+                        .update({ created_at: new Date().toISOString() })
                         .eq('id', riffId)
+                        .select()
                         .single();
 
                     if (error) throw error;
@@ -376,7 +382,7 @@
                 } catch (e) {
                     console.error("Error polling for partner: ", e);
                 }
-            }, 2500);
+            }, 5000); // Pulse heartbeat update every 5 seconds
         }
 
         async function cancelPairing() {
