@@ -33,26 +33,6 @@
 </head>
 <body class="flex flex-col min-h-screen justify-between selection:bg-purple-500 selection:text-white overflow-x-hidden">
 
-    <!-- Supabase Config Setup Overlay (Removable or collapsible) -->
-    <div id="config-panel" class="bg-gray-900 border-b border-gray-800 p-4 transition-all duration-300">
-        <div class="max-w-md mx-auto flex flex-col gap-3">
-            <div class="flex justify-between items-center">
-                <span class="text-xs uppercase tracking-widest text-purple-400 font-bold heading-font">Supabase Connection Settings</span>
-                <button onclick="toggleConfig()" class="text-xs text-gray-400 hover:text-white underline">Hide Setup</button>
-            </div>
-            <p class="text-xs text-gray-400 leading-relaxed">
-                Connect your database to enable real-time anonymous pairing. Paste your keys here, or edit the source code directly.
-            </p>
-            <div class="grid grid-cols-1 gap-2">
-                <input type="text" id="sb-url" placeholder="Supabase Project URL (https://your-project.supabase.co)" class="bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
-                <input type="password" id="sb-key" placeholder="Supabase Anon API Key" class="bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
-            </div>
-            <button onclick="saveConfig()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 rounded transition-colors duration-200">
-                Apply & Connect
-            </button>
-        </div>
-    </div>
-
     <!-- Main App Frame -->
     <main class="flex-grow flex items-center justify-center p-4">
         <div class="w-full max-w-md bg-gray-950/60 backdrop-blur-md rounded-2xl border border-gray-800 p-6 md:p-8 flex flex-col shadow-2xl relative overflow-hidden">
@@ -284,46 +264,23 @@
             userId = storedId;
         }
 
-        // Initialize Supabase Connection
+        // Initialize Supabase Connection using static configuration variables
         function initSupabase() {
-            const savedUrl = localStorage.getItem('sb_url') || SUPABASE_URL;
-            const savedKey = localStorage.getItem('sb_key') || SUPABASE_ANON_KEY;
-
-            document.getElementById('sb-url').value = savedUrl;
-            document.getElementById('sb-key').value = savedKey;
+            const savedUrl = SUPABASE_URL;
+            const savedKey = SUPABASE_ANON_KEY;
 
             if (savedUrl && savedKey) {
                 try {
                     // Initialize the client using the globally loaded supabase variable
                     sbClient = supabase.createClient(savedUrl, savedKey);
                     showToast("Database connected successfully!");
-                    document.getElementById('config-panel').classList.add('hidden');
                 } catch (err) {
                     showToast("Failed to initialize Supabase. Check config.");
                     console.error(err);
                 }
             } else {
-                // Display the config panel on startup if keys are not configured yet
-                document.getElementById('config-panel').classList.remove('hidden');
+                showToast("Please configure your Supabase URL and Key.");
             }
-        }
-
-        // Save Credentials manually from overlay UI
-        function saveConfig() {
-            const url = document.getElementById('sb-url').value.trim();
-            const key = document.getElementById('sb-key').value.trim();
-            if (!url || !key) {
-                showToast("Please enter both Supabase URL and Key.");
-                return;
-            }
-            localStorage.setItem('sb_url', url);
-            localStorage.setItem('sb_key', key);
-            initSupabase();
-        }
-
-        function toggleConfig() {
-            const panel = document.getElementById('config-panel');
-            panel.classList.toggle('hidden');
         }
 
         // Display Toast popup safely within an iframe context
@@ -342,7 +299,6 @@
         async function startPairing() {
             if (!sbClient) {
                 showToast("Please link your Supabase database first.");
-                document.getElementById('config-panel').classList.remove('hidden');
                 return;
             }
 
