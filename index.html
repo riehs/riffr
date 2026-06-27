@@ -78,8 +78,8 @@
                     <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                 </div>
                 <div class="text-center space-y-1">
-                    <h3 class="text-sm heading-font font-medium tracking-wide text-gray-300 uppercase">Searching for an opening...</h3>
-                    <p class="text-xs text-gray-500">Matching you with the next available human</p>
+                    <h3 id="matching-title" class="text-sm heading-font font-medium tracking-wide text-gray-300 uppercase">Searching for an opening...</h3>
+                    <p id="matching-desc" class="text-xs text-gray-500">Matching you with the next available human</p>
                 </div>
                 <button onclick="cancelPairing()" class="px-4 py-2 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 rounded-lg border border-gray-800 transition-all">
                     Cancel search
@@ -287,6 +287,9 @@
                 return;
             }
 
+            // Set initial searching status in HTML
+            document.getElementById('matching-title').textContent = "Searching for an opening...";
+            document.getElementById('matching-desc').textContent = "Matching you with the next available human";
             switchState('state-matching');
 
             try {
@@ -337,6 +340,11 @@
                     if (createError) throw createError;
 
                     currentRiff = newRiff;
+                    
+                    // Update searching status in HTML to inform them they are hosting
+                    document.getElementById('matching-title').textContent = "Lobby Created!";
+                    document.getElementById('matching-desc').textContent = "You are the host. Waiting for another human to join...";
+                    
                     // Start checking periodically if someone joined
                     startPollingForPartner(newRiff.id);
                 }
