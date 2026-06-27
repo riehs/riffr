@@ -198,8 +198,8 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     </button>
 
-                    <!-- Leave / Part Ways -->
-                    <button onclick="partWays()" class="w-full py-3 bg-gray-950 hover:bg-red-950/20 text-gray-500 hover:text-red-400 font-medium rounded-xl text-sm transition-all border border-transparent hover:border-red-900/30">
+                    <!-- Leave / Part Ways (Fixed to call leaveRiff() so both players exit gracefully) -->
+                    <button onclick="leaveRiff()" class="w-full py-3 bg-gray-950 hover:bg-red-950/20 text-gray-500 hover:text-red-400 font-medium rounded-xl text-sm transition-all border border-transparent hover:border-red-900/30">
                         Part Ways (End Match)
                     </button>
                 </div>
