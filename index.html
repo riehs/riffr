@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RIFFR — Light riffing between humans</title>
+    <!-- Tailwind CSS for elegant responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+        .heading-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        /* Custom scrollbar for clean transcript look */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between selection:bg-purple-500 selection:text-white overflow-x-hidden">
+
+    <!-- Supabase Config Setup Overlay (Removable or collapsible) -->
+    <div id="config-panel" class="bg-gray-900 border-b border-gray-800 p-4 transition-all duration-300">
+        <div class="max-w-md mx-auto flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+                <span class="text-xs uppercase tracking-widest text-purple-400 font-bold heading-font">Supabase Connection Settings</span>
+                <button onclick="toggleConfig()" class="text-xs text-gray-400 hover:text-white underline">Hide Setup</button>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed">
+                Connect your database to enable real-time anonymous pairing. Paste your keys here, or edit the source code directly.
+            </p>
+            <div class="grid grid-cols-1 gap-2">
+                <input type="text" id="sb-url" placeholder="Supabase Project URL (https://your-project.supabase.co)" class="bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                <input type="password" id="sb-key" placeholder="Supabase Anon API Key" class="bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <button onclick="saveConfig()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 rounded transition-colors duration-200">
+                Apply & Connect
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App Frame -->
+    <main class="flex-grow flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-gray-950/60 backdrop-blur-md rounded-2xl border border-gray-800 p-6 md:p-8 flex flex-col shadow-2xl relative overflow-hidden">
+            
+            <!-- Glow background effect -->
+            <div class="absolute -top-10 -left-10 w-40 h-40 bg-purple-900/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-pink-900/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <!-- Header -->
+            <header class="text-center pb-6 border-b border-gray-900">
+                <h1 class="text-3xl heading-font font-bold tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent">
+                    RIFFR
+                </h1>
+                <p class="text-xs text-gray-400 tracking-wider uppercase mt-1">Light riffing between humans</p>
+                <div class="flex items-center justify-center gap-2 mt-2">
+                    <span class="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-[10px] text-gray-500 uppercase tracking-widest font-mono">Anonymous • Human-only</span>
+                </div>
+            </header>
+
+            <!-- LOBBY STATE (Pairing Screen) -->
+            <div id="state-lobby" class="flex flex-col items-center justify-center py-12 gap-6">
+                <div class="text-center max-w-xs space-y-2">
+                    <h3 class="text-lg heading-font font-medium text-gray-200">Ready to riff?</h3>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        No profiles. No feeds. Just you, another human, a spark prompt, and a ticking 7-turn riff meter.
+                    </p>
+                </div>
+                
+                <div class="w-full space-y-3">
+                    <button id="btn-pair" onclick="startPairing()" class="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-900/20 transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
+                        <span>Find Someone</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- MATCHING STATE (Searching Indicator) -->
+            <div id="state-matching" class="hidden flex flex-col items-center justify-center py-16 gap-6">
+                <div class="relative w-16 h-16 flex items-center justify-center">
+                    <div class="absolute inset-0 border-4 border-purple-500/20 rounded-full"></div>
+                    <div class="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin"></div>
+                    <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </div>
+                <div class="text-center space-y-1">
+                    <h3 class="text-sm heading-font font-medium tracking-wide text-gray-300 uppercase">Searching for an opening...</h3>
+                    <p class="text-xs text-gray-500">Matching you with the next available human</p>
+                </div>
+                <button onclick="cancelPairing()" class="px-4 py-2 text-xs text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 rounded-lg border border-gray-800 transition-all">
+                    Cancel search
+                </button>
+            </div>
+
+            <!-- RIFFING STATE (Active game screen) -->
+            <div id="state-active" class="hidden flex flex-col pt-6 gap-6">
+                
+                <!-- Prompt Card -->
+                <div class="bg-gray-900/50 border border-gray-800/80 rounded-xl p-4 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 px-2 py-0.5 bg-purple-950 text-purple-400 text-[9px] uppercase tracking-wider rounded-bl-lg font-mono font-bold">
+                        The Spark
+                    </div>
+                    <span class="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Prompt</span>
+                    <h2 id="riff-prompt" class="text-md md:text-lg font-semibold text-gray-200 heading-font leading-relaxed">
+                        “The worst possible slogan for a dentist’s office”
+                    </h2>
+                    <p id="prompt-disclaimer" class="text-[10px] text-gray-500 mt-2 italic transition-opacity duration-300">
+                        * Prompt disappears after turn 4 to let the riff flow naturally.
+                    </p>
+                </div>
+
+                <!-- Live Volley Transcript -->
+                <div class="space-y-4">
+                    <span class="text-[10px] text-gray-500 uppercase tracking-widest block">The Volley</span>
+                    <div id="transcript-container" class="space-y-3 max-h-[220px] overflow-y-auto pr-1 flex flex-col gap-2">
+                        <!-- Dynamic lines will drop here -->
+                    </div>
+                </div>
+
+                <!-- Active Input / Your Turn Panel -->
+                <div id="input-section" class="space-y-3 pt-2">
+                    <div class="flex justify-between items-center text-[10px] uppercase tracking-widest text-gray-500">
+                        <span>Your Turn</span>
+                        <span id="turn-indicator" class="text-purple-400 font-bold"></span>
+                    </div>
+                    <div class="relative flex items-center">
+                        <input type="text" id="input-line" placeholder="Yes, and..." class="w-full bg-gray-900 border border-gray-800 rounded-xl py-3.5 pl-4 pr-20 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all disabled:opacity-50" onkeydown="handleEnterKey(event)">
+                        <button id="btn-send" onclick="sendLine()" class="absolute right-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors duration-150 disabled:opacity-50">
+                            SEND
+                        </button>
+                    </div>
+                    <div id="turn-status-bar" class="text-center text-xs text-gray-500 italic py-1">
+                        <!-- Type status indicators go here -->
+                    </div>
+                </div>
+
+                <!-- Turn 5+ Reveal Section -->
+                <div id="reveal-section" class="hidden bg-indigo-950/20 border border-indigo-900/30 rounded-xl p-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] text-indigo-400 uppercase tracking-widest font-bold font-mono">⚡ Turn 5 Unlock!</span>
+                        <span class="text-[10px] text-gray-500">Optional identity spark</span>
+                    </div>
+                    <p class="text-xs text-gray-300 leading-relaxed">
+                        You can now share one safe clue about yourself (e.g., your timezone, nickname, city, or what made you laugh today). Both must reveal to unlock!
+                    </p>
+                    
+                    <div id="reveal-unlocked-clues" class="hidden bg-gray-900/80 p-3 rounded-lg border border-gray-800 space-y-2 text-xs">
+                        <p class="font-bold text-indigo-400 uppercase tracking-wider text-[9px]">Revealed Clues:</p>
+                        <div id="reveal-player-self" class="text-gray-300"></div>
+                        <div id="reveal-player-other" class="text-gray-300"></div>
+                    </div>
+
+                    <div id="reveal-action-panel" class="space-y-2">
+                        <input type="text" id="input-reveal" placeholder="e.g. In Chicago, drank lukewarm coffee today." class="w-full bg-gray-900/80 border border-gray-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                        <button onclick="submitReveal()" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg transition-colors">
+                            Opt-in to Reveal Clue
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Riff Meter UI -->
+                <div class="border-t border-gray-900 pt-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-gray-400 font-medium heading-font">Riff Meter</span>
+                        <span id="meter-counter" class="text-gray-400 font-mono">0 / 7 turns</span>
+                    </div>
+                    <div class="w-full bg-gray-900 rounded-full h-2 overflow-hidden">
+                        <div id="meter-progress" class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <div class="flex justify-end pt-1">
+                        <button onclick="leaveRiff()" class="text-[10px] text-gray-500 hover:text-red-400 transition-colors uppercase tracking-wider">
+                            [ Leave Riff ]
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- COMPLETED / END STATE -->
+            <div id="state-completed" class="hidden flex flex-col pt-6 gap-6 text-center">
+                <div class="space-y-2">
+                    <div class="inline-flex items-center justify-center p-3 bg-green-950/40 rounded-full border border-green-800/30 mb-2">
+                        <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <h3 class="text-xl font-bold heading-font text-gray-200">7-Turn Riff Complete!</h3>
+                    <p class="text-xs text-gray-400 px-4">
+                        Beautiful coordination. What would you like to do next with your anonymous companion?
+                    </p>
+                </div>
+
+                <div class="flex flex-col gap-3 pt-2">
+                    <!-- Riff Again -->
+                    <button id="btn-riff-again" onclick="requestRiffAgain()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                        <span>Riff Again (Same Person)</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 3v5h-5"/></svg>
+                    </button>
+                    <div id="riff-again-waiting" class="hidden text-xs text-purple-400 italic">
+                        Waiting for partner to agree...
+                    </div>
+
+                    <!-- Save Riff -->
+                    <button onclick="saveTranscript()" class="w-full py-3 bg-gray-900 hover:bg-gray-800 text-gray-200 font-semibold rounded-xl text-sm border border-gray-800 transition-all flex items-center justify-center gap-2">
+                        <span>Save This Riff (TXT)</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    </button>
+
+                    <!-- Leave / Part Ways -->
+                    <button onclick="partWays()" class="w-full py-3 bg-gray-950 hover:bg-red-950/20 text-gray-500 hover:text-red-400 font-medium rounded-xl text-sm transition-all border border-transparent hover:border-red-900/30">
+                        Part Ways (End Match)
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Simple custom notification toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-gray-800 text-gray-200 text-xs py-3 px-6 rounded-xl shadow-xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+        <span id="toast-message">Notification details</span>
+    </div>
+
+    <!-- Client Script -->
+    <script>
+        // Supabase configuration - Filled via localStorage or direct code modification
+        let SUPABASE_URL = "https://dfzsddoqicxyjbcggvzr.supabase.co";
+        let SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmenNkZG9xaWN4eWpiY2dndnpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDk3ODIsImV4cCI6MjA5ODA4NTc4Mn0.hsyJnUuXoAqbS8VWaNv2VApqGUZYdVo8L2mqVjBmHXQ";
+
+        // Changed identifier to 'sbClient' to avoid SyntaxError collision with Supabase's global namespace object
+        let sbClient = null;
+        let userId = "";
+        let currentRiff = null;
+        let messageSubscription = null;
+        let riffSubscription = null;
+        let isTurn = false;
+        let turnCount = 0;
+        let checkInterval = null;
+
+        // Interactive prompts
+        const prompts = [
+            "The worst possible slogan for a dentist’s office",
+            "A rejected children’s book title",
+            "An argument you overheard between two ghosts",
+            "A terrible idea that almost sounds good",
+            "An extremely specific superpower that is barely useful",
+            "The name of a restaurant that only serves lukewarm soup",
+            "A terrible name for a newly discovered planet",
+            "The subtitle of a remarkably boring documentary",
+            "Why the sky is actually blue (wrong answers only)"
+        ];
+
+        // Unique anonymous identifier setup
+        function initUser() {
+            let storedId = localStorage.getItem('riff_user_id');
+            if (!storedId) {
+                // Generate secure random UUID
+                storedId = 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                localStorage.setItem('riff_user_id', storedId);
+            }
+            userId = storedId;
+        }
+
+        // Initialize Supabase Connection
+        function initSupabase() {
+            const savedUrl = localStorage.getItem('sb_url') || SUPABASE_URL;
+            const savedKey = localStorage.getItem('sb_key') || SUPABASE_ANON_KEY;
+
+            document.getElementById('sb-url').value = savedUrl;
+            document.getElementById('sb-key').value = savedKey;
+
+            if (savedUrl && savedKey) {
+                try {
+                    // Initialize the client using the globally loaded supabase variable
+                    sbClient = supabase.createClient(savedUrl, savedKey);
+                    showToast("Database connected successfully!");
+                    document.getElementById('config-panel').classList.add('hidden');
+                } catch (err) {
+                    showToast("Failed to initialize Supabase. Check config.");
+                    console.error(err);
+                }
+            } else {
+                // Display the config panel on startup if keys are not configured yet
+                document.getElementById('config-panel').classList.remove('hidden');
+            }
+        }
+
+        // Save Credentials manually from overlay UI
+        function saveConfig() {
+            const url = document.getElementById('sb-url').value.trim();
+            const key = document.getElementById('sb-key').value.trim();
+            if (!url || !key) {
+                showToast("Please enter both Supabase URL and Key.");
+                return;
+            }
+            localStorage.setItem('sb_url', url);
+            localStorage.setItem('sb_key', key);
+            initSupabase();
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('config-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        // Display Toast popup safely within an iframe context
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 3500);
+        }
+
+        // Matchmaking logic
+        async function startPairing() {
+            if (!sbClient) {
+                showToast("Please link your Supabase database first.");
+                document.getElementById('config-panel').classList.remove('hidden');
+                return;
+            }
+
+            switchState('state-matching');
+
+            try {
+                // Look for an open riff session waiting for players (excluding our own sessions)
+                const { data: openRiffs, error } = await sbClient
+                    .from('riffs')
+                    .select('*')
+                    .eq('status', 'waiting')
+                    .neq('user_1_id', userId)
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+
+                if (error) throw error;
+
+                if (openRiffs && openRiffs.length > 0) {
+                    // Match found! Join the existing session
+                    const matchedRiff = openRiffs[0];
+                    const firstTurnUser = Math.random() > 0.5 ? matchedRiff.user_1_id : userId;
+
+                    const { data: joinedRiff, error: joinError } = await sbClient
+                        .from('riffs')
+                        .update({
+                            user_2_id: userId,
+                            status: 'active',
+                            current_turn_user_id: firstTurnUser
+                        })
+                        .eq('id', matchedRiff.id)
+                        .select()
+                        .single();
+
+                    if (joinError) throw joinError;
+
+                    currentRiff = joinedRiff;
+                    setupRiffSession(currentRiff);
+                } else {
+                    // No waiting riffs found. Create one.
+                    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+                    const { data: newRiff, error: createError } = await sbClient
+                        .from('riffs')
+                        .insert([{
+                            prompt: randomPrompt,
+                            user_1_id: userId,
+                            status: 'waiting'
+                        }])
+                        .select()
+                        .single();
+
+                    if (createError) throw createError;
+
+                    currentRiff = newRiff;
+                    // Start checking periodically if someone joined
+                    startPollingForPartner(newRiff.id);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Pairing failed. Ensure your SQL tables exist.");
+                switchState('state-lobby');
+            }
+        }
+
+        // Poll to see if someone joined the session we created
+        function startPollingForPartner(riffId) {
+            checkInterval = setInterval(async () => {
+                if (!sbClient) return;
+                try {
+                    const { data, error } = await sbClient
+                        .from('riffs')
+                        .select('*')
+                        .eq('id', riffId)
+                        .single();
+
+                    if (error) throw error;
+
+                    if (data && data.status === 'active') {
+                        clearInterval(checkInterval);
+                        currentRiff = data;
+                        setupRiffSession(currentRiff);
+                    }
+                } catch (e) {
+                    console.error("Error polling for partner: ", e);
+                }
+            }, 2500);
+        }
+
+        async function cancelPairing() {
+            if (checkInterval) clearInterval(checkInterval);
+            if (currentRiff && currentRiff.status === 'waiting') {
+                // Delete the empty room we created
+                await sbClient.from('riffs').delete().eq('id', currentRiff.id);
+            }
+            currentRiff = null;
+            switchState('state-lobby');
+        }
+
+        // Connect the paired interface
+        async function setupRiffSession(riff) {
+            if (checkInterval) clearInterval(checkInterval);
+            switchState('state-active');
+
+            // Render Prompt
+            document.getElementById('riff-prompt').textContent = `“${riff.prompt}”`;
+            
+            // Subscribe to live messages
+            subscribeToMessages(riff.id);
+
+            // Subscribe to changes in the riff room (like turn changes, reveals, completes)
+            subscribeToRiffChanges(riff.id);
+
+            // Synchronize active turns
+            syncTurnState(riff);
+            
+            // Fetch any existing conversation lines in case of reconnects
+            fetchMessages(riff.id);
+        }
+
+        // Fetch existing messages
+        async function fetchMessages(riffId) {
+            try {
+                const { data, error } = await sbClient
+                    .from('messages')
+                    .select('*')
+                    .eq('riff_id', riffId)
+                    .order('created_at', { ascending: true });
+
+                if (error) throw error;
+                renderTranscript(data || []);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Subscriptions
+        function subscribeToMessages(riffId) {
+            if (messageSubscription) messageSubscription.unsubscribe();
+
+            messageSubscription = sbClient
+                .channel('realtime:messages')
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'messages', filter: `riff_id=eq.${riffId}` },
+                    (payload) => {
+                        appendMessage(payload.new);
+                    }
+                )
+                .subscribe();
+        }
+
+        // Subscribe to changes in the riff room (like turn changes, reveals, completes)
+        function subscribeToRiffChanges(riffId) {
+            if (riffSubscription) riffSubscription.unsubscribe();
+
+            riffSubscription = sbClient
+                .channel('realtime:riffs')
+                .on(
+                    'postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'riffs', filter: `id=eq.${riffId}` },
+                    (payload) => {
+                        const updated = payload.new;
+                        currentRiff = updated;
+                        syncTurnState(updated);
+                    }
+                )
+                .subscribe();
+        }
+
+        // Sync turn layout, prompt visibility, and Riff Meter
+        function syncTurnState(riff) {
+            turnCount = riff.turn_count;
+            
+            // Check if room was abandoned by other party
+            if (riff.status === 'abandoned') {
+                showToast("Partner left the riff.");
+                partWays();
+                return;
+            }
+
+            // Hide Prompt after turn 4
+            if (turnCount >= 4) {
+                document.getElementById('riff-prompt').textContent = "The original prompt has served its purpose. Keep flowing!";
+                document.getElementById('prompt-disclaimer').classList.add('opacity-0');
+            } else {
+                document.getElementById('riff-prompt').textContent = `“${riff.prompt}”`;
+                document.getElementById('prompt-disclaimer').classList.remove('opacity-0');
+            }
+
+            // Check if session completed (7 turns reached)
+            if (riff.status === 'completed' || turnCount >= 7) {
+                finishRiff();
+                return;
+            }
+
+            // Lock / Unlock inputs based on who has turn control
+            isTurn = (riff.current_turn_user_id === userId);
+            const inputField = document.getElementById('input-line');
+            const sendBtn = document.getElementById('btn-send');
+            const turnIndicator = document.getElementById('turn-indicator');
+            const turnStatusText = document.getElementById('turn-status-bar');
+
+            if (isTurn) {
+                inputField.removeAttribute('disabled');
+                sendBtn.removeAttribute('disabled');
+                inputField.focus();
+                turnIndicator.textContent = "Your turn";
+                turnIndicator.className = "text-purple-400 font-bold";
+                turnStatusText.textContent = "Let's hear your next volley...";
+            } else {
+                inputField.setAttribute('disabled', 'true');
+                sendBtn.setAttribute('disabled', 'true');
+                turnIndicator.textContent = "Waiting";
+                turnIndicator.className = "text-gray-500";
+                turnStatusText.innerHTML = `<span class="inline-flex gap-1 items-center justify-center"><span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce"></span> Partner is thinking...</span>`;
+            }
+
+            // Manage progress meter
+            const pct = (turnCount / 7) * 100;
+            document.getElementById('meter-progress').style.width = `${pct}%`;
+            document.getElementById('meter-counter').textContent = `${turnCount} / 7 turns`;
+
+            // Turn 5 Optional Reveal Setup
+            if (turnCount >= 5) {
+                document.getElementById('reveal-section').classList.remove('hidden');
+                syncRevealStatus(riff);
+            } else {
+                document.getElementById('reveal-section').classList.add('hidden');
+            }
+        }
+
+        // Handle sending lines
+        async function sendLine() {
+            if (!isTurn || !currentRiff) return;
+
+            const input = document.getElementById('input-line');
+            const text = input.value.trim();
+
+            if (!text) return;
+
+            // Optimistic clean input field
+            input.value = "";
+
+            try {
+                // Post volley record
+                await sbClient.from('messages').insert([{
+                    riff_id: currentRiff.id,
+                    sender_id: userId,
+                    text: text
+                }]);
+
+                const nextTurnCount = turnCount + 1;
+                const nextTurnUser = (currentRiff.user_1_id === userId) ? currentRiff.user_2_id : currentRiff.user_1_id;
+                const isCompleted = nextTurnCount >= 7;
+
+                // Move Turn State forwards
+                await sbClient
+                    .from('riffs')
+                    .update({
+                        turn_count: nextTurnCount,
+                        current_turn_user_id: nextTurnUser,
+                        status: isCompleted ? 'completed' : 'active'
+                    })
+                    .eq('id', currentRiff.id);
+
+            } catch (err) {
+                console.error(err);
+                showToast("Could not deliver line.");
+            }
+        }
+
+        // Helper trigger to send line on Enter Key
+        function handleEnterKey(event) {
+            if (event.key === 'Enter') {
+                sendLine();
+            }
+        }
+
+        // Message dynamic render mechanics
+        function renderTranscript(messages) {
+            const container = document.getElementById('transcript-container');
+            container.innerHTML = "";
+            messages.forEach(msg => appendMessage(msg));
+        }
+
+        function appendMessage(msg) {
+            const container = document.getElementById('transcript-container');
+            const isSelf = msg.sender_id === userId;
+            
+            const outerDiv = document.createElement('div');
+            outerDiv.className = `flex ${isSelf ? 'justify-end' : 'justify-start'} w-full animate-fade-in`;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = `max-w-[85%] rounded-2xl px-4 py-3 text-sm transition-all leading-relaxed ${
+                isSelf 
+                ? 'bg-purple-600/20 text-purple-200 border border-purple-500/30 rounded-tr-none' 
+                : 'bg-gray-900 text-gray-200 border border-gray-800 rounded-tl-none'
+            }`;
+
+            const speakerTag = document.createElement('div');
+            speakerTag.className = "text-[9px] uppercase tracking-wider text-gray-500 font-mono font-bold mb-1";
+            speakerTag.textContent = isSelf ? "You" : "Them";
+
+            const textDiv = document.createElement('div');
+            textDiv.textContent = msg.text;
+
+            bubbleDiv.appendChild(speakerTag);
+            bubbleDiv.appendChild(textDiv);
+            outerDiv.appendChild(bubbleDiv);
+            container.appendChild(outerDiv);
+
+            // Push window down nicely
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Turn 5 Unlocks: Handshake Identity reveals
+        async function submitReveal() {
+            if (!currentRiff) return;
+            const revealVal = document.getElementById('input-reveal').value.trim();
+            if (!revealVal) {
+                showToast("Please write a clue first.");
+                return;
+            }
+
+            const isPlayer1 = currentRiff.user_1_id === userId;
+            const updatePayload = {};
+
+            if (isPlayer1) {
+                updatePayload.user_1_reveal_text = revealVal;
+                updatePayload.user_1_opt_reveal = true;
+            } else {
+                updatePayload.user_2_reveal_text = revealVal;
+                updatePayload.user_2_opt_reveal = true;
+            }
+
+            try {
+                const { error } = await sbClient
+                    .from('riffs')
+                    .update(updatePayload)
+                    .eq('id', currentRiff.id);
+
+                if (error) throw error;
+                showToast("Reveal registered. Waiting for partner.");
+                document.getElementById('reveal-action-panel').classList.add('hidden');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function syncRevealStatus(riff) {
+            const isPlayer1 = riff.user_1_id === userId;
+            const myRevealOpt = isPlayer1 ? riff.user_1_opt_reveal : riff.user_2_opt_reveal;
+            const partnerRevealOpt = isPlayer1 ? riff.user_2_opt_reveal : riff.user_1_opt_reveal;
+
+            const selfRevealText = isPlayer1 ? riff.user_1_reveal_text : riff.user_2_reveal_text;
+            const otherRevealText = isPlayer1 ? riff.user_2_reveal_text : riff.user_1_reveal_text;
+
+            // Handle UI display for input panel
+            if (myRevealOpt) {
+                document.getElementById('reveal-action-panel').classList.add('hidden');
+            } else {
+                document.getElementById('reveal-action-panel').classList.remove('hidden');
+            }
+
+            // Both opted in -> unlock cards
+            if (myRevealOpt && partnerRevealOpt) {
+                document.getElementById('reveal-unlocked-clues').classList.remove('hidden');
+                document.getElementById('reveal-player-self').innerHTML = `<span class="text-indigo-400 font-medium font-mono">You:</span> "${selfRevealText}"`;
+                document.getElementById('reveal-player-other').innerHTML = `<span class="text-pink-400 font-medium font-mono">Them:</span> "${otherRevealText}"`;
+            } else if (myRevealOpt) {
+                document.getElementById('reveal-unlocked-clues').classList.remove('hidden');
+                document.getElementById('reveal-player-self').innerHTML = `<span class="text-indigo-400 font-medium font-mono">You:</span> "${selfRevealText}"`;
+                document.getElementById('reveal-player-other').innerHTML = `<span class="text-gray-500 italic">Waiting for peer to opt-in...</span>`;
+            } else {
+                document.getElementById('reveal-unlocked-clues').classList.add('hidden');
+            }
+        }
+
+        // End Game State Handler (Completing 7-Turns)
+        function finishRiff() {
+            switchState('state-completed');
+            
+            // Check if they already pressed riff again
+            if (currentRiff) {
+                const isPlayer1 = currentRiff.user_1_id === userId;
+                const otherPartyWantsRiff = isPlayer1 ? currentRiff.user_2_riff_again : currentRiff.user_1_riff_again;
+                const myChoiceRiff = isPlayer1 ? currentRiff.user_1_riff_again : currentRiff.user_2_riff_again;
+
+                if (myChoiceRiff) {
+                    document.getElementById('riff-again-waiting').classList.remove('hidden');
+                } else {
+                    document.getElementById('riff-again-waiting').classList.add('hidden');
+                }
+
+                if (myChoiceRiff && otherPartyWantsRiff) {
+                    // Both confirmed! Restart room
+                    restartRiffRoom();
+                }
+            }
+        }
+
+        // Riff Again Mechanism (New prompt with the exact same peer)
+        async function requestRiffAgain() {
+            if (!currentRiff) return;
+
+            const isPlayer1 = currentRiff.user_1_id === userId;
+            const updatePayload = {};
+
+            if (isPlayer1) {
+                updatePayload.user_1_riff_again = true;
+            } else {
+                updatePayload.user_2_riff_again = true;
+            }
+
+            try {
+                const { error } = await sbClient
+                    .from('riffs')
+                    .update(updatePayload)
+                    .eq('id', currentRiff.id);
+
+                if (error) throw error;
+                showToast("Request sent!");
+                document.getElementById('riff-again-waiting').classList.remove('hidden');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Reset parameters, choose brand new random prompt, restart session counters
+        async function restartRiffRoom() {
+            if (!currentRiff) return;
+
+            const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+            const startingPlayer = Math.random() > 0.5 ? currentRiff.user_1_id : currentRiff.user_2_id;
+
+            try {
+                // Clear out old conversation history so we start with a clean Slate
+                await sbClient.from('messages').delete().eq('riff_id', currentRiff.id);
+
+                // Update room variables to turn zero
+                const { data, error } = await sbClient
+                    .from('riffs')
+                    .update({
+                        prompt: randomPrompt,
+                        turn_count: 0,
+                        current_turn_user_id: startingPlayer,
+                        status: 'active',
+                        user_1_riff_again: false,
+                        user_2_riff_again: false,
+                        user_1_opt_reveal: false,
+                        user_2_opt_reveal: false,
+                        user_1_reveal_text: null,
+                        user_2_reveal_text: null
+                    })
+                    .eq('id', currentRiff.id)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+
+                currentRiff = data;
+                setupRiffSession(currentRiff);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Save session locally to a neat textual transcript file
+        async function saveTranscript() {
+            if (!currentRiff) return;
+
+            try {
+                const { data: messages, error } = await sbClient
+                    .from('messages')
+                    .select('*')
+                    .eq('riff_id', currentRiff.id)
+                    .order('created_at', { ascending: true });
+
+                if (error) throw error;
+
+                let fileContent = `RIFFR TRANSCRIPT\n`;
+                fileContent += `==================================\n`;
+                fileContent += `Prompt: "${currentRiff.prompt}"\n`;
+                fileContent += `Date: ${new Date().toLocaleDateString()}\n`;
+                fileContent += `==================================\n\n`;
+
+                messages.forEach((msg, idx) => {
+                    const author = msg.sender_id === userId ? "You" : "Partner";
+                    fileContent += `[Turn ${idx + 1}] ${author}: ${msg.text}\n`;
+                });
+
+                fileContent += `\n==================================\n`;
+                fileContent += `End of Riff. Generated on RIFFR.`;
+
+                const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `riffr-session-${currentRiff.id.slice(0, 8)}.txt`;
+                link.click();
+                showToast("Transcript downloaded successfully!");
+            } catch (err) {
+                console.error(err);
+                showToast("Error processing transcript download.");
+            }
+        }
+
+        // Leave Active Game and signal other user
+        async function leaveRiff() {
+            if (currentRiff) {
+                try {
+                    await sbClient
+                        .from('riffs')
+                        .update({ status: 'abandoned' })
+                        .eq('id', currentRiff.id);
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+            partWays();
+        }
+
+        // Clean up connections, disconnect and head to main screen
+        function partWays() {
+            if (messageSubscription) messageSubscription.unsubscribe();
+            if (riffSubscription) riffSubscription.unsubscribe();
+            if (checkInterval) clearInterval(checkInterval);
+
+            currentRiff = null;
+            isTurn = false;
+            turnCount = 0;
+
+            // Reset UI modules
+            document.getElementById('input-reveal').value = "";
+            document.getElementById('input-line').value = "";
+            document.getElementById('reveal-section').classList.add('hidden');
+            document.getElementById('reveal-unlocked-clues').classList.add('hidden');
+            document.getElementById('riff-again-waiting').classList.add('hidden');
+
+            switchState('state-lobby');
+            showToast("Volley closed. Let's find a fresh partner!");
+        }
+
+        // State Machine Manager
+        function switchState(targetId) {
+            const states = ['state-lobby', 'state-matching', 'state-active', 'state-completed'];
+            states.forEach(stateId => {
+                const element = document.getElementById(stateId);
+                if (stateId === targetId) {
+                    element.classList.remove('hidden');
+                } else {
+                    element.classList.add('hidden');
+                }
+            });
+        }
+
+        // Global Boot Loader
+        window.onload = function() {
+            initUser();
+            initSupabase();
+        };
+    </script>
+</body>
+</html>
